@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>InterviewIQ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<style>
+:root{--bg:#f4f6f3;--ink:#14213d;--mut:#5b6577;--card:#fff;--line:#d9dfd6;--teal:#0f766e;--gold:#f2a900;--bad:#b42318}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI","Noto Sans Kannada",system-ui,sans-serif}
+header{display:flex;gap:14px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--card);flex-wrap:wrap}
+h1{font-size:20px;margin:0 12px 0 0;letter-spacing:-.3px}h2{font-size:15px;margin:0 0 8px}
+select,button,textarea,input{font:inherit;border:1px solid var(--line);border-radius:8px;padding:7px 12px;background:#fff;color:var(--ink)}
+button{cursor:pointer}button.p{background:var(--teal);color:#fff;border-color:var(--teal)}button.k{background:#fff6dc;border-color:var(--gold)}
+button:focus-visible,select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+main{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px 20px;max-width:1400px;margin:auto}
+@media(max-width:960px){main{grid-template-columns:1fr}}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column}
+#log{height:260px;overflow:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.m{padding:8px 12px;border-radius:10px;max-width:90%}.iv{background:#e6f2f0}.me{background:#eef0f6;align-self:flex-end}
+.as{background:#fff6dc;border-left:4px solid var(--gold);max-width:100%}
+.warn-box{background:#fef3f2;border-left:4px solid var(--bad);color:var(--bad);max-width:100%}
+textarea{width:100%;resize:vertical}
+#editor-container{height:300px;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:8px}
+.cam-wrap{position:relative;display:inline-block;width:150px;height:100px;background:#000;border-radius:8px;overflow:hidden}
+.cam-wrap video{width:100%;height:100%;object-fit:cover;border-radius:8px}
+.coach-toast{position:absolute;bottom:4px;left:4px;right:4px;background:rgba(17,24,39,0.88);color:#fef08a;font-size:10px;line-height:1.2;padding:4px 6px;border-radius:4px;display:none;pointer-events:none;border-left:3px solid var(--gold);z-index:10;animation:fadeIn 0.3s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+.toggle-lbl{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--mut);cursor:pointer;user-select:none}
+.ok{color:var(--teal)}.no{color:var(--bad)}.warn{color:#9a6700}
+.term-box{background:#111827;color:#f3f4f6;border-radius:8px;padding:12px;font:13px/1.4 Consolas,monospace;max-height:260px;overflow:auto}
+.term-hdr{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #374151;padding-bottom:6px;margin-bottom:8px;font-weight:600}
+.badge-pass{background:#065f46;color:#a7f3d0;padding:2px 8px;border-radius:12px;font-size:11px}
+.badge-fail{background:#7f1d1d;color:#fecaca;padding:2px 8px;border-radius:12px;font-size:11px}
+.badge-info{background:#1e3a8a;color:#bfdbfe;padding:2px 8px;border-radius:12px;font-size:11px}
+.term-case{background:#1f2937;border-radius:6px;padding:8px 10px;margin-bottom:6px;border-left:3px solid transparent}
+.term-case.c-ok{border-left-color:#10b981}
+.term-case.c-fail{border-left-color:#ef4444}
+.term-case pre{margin:2px 0;font:inherit;white-space:pre-wrap;color:#d1d5db}
+.term-err{background:#3b1212;color:#fca5a5;padding:8px;border-radius:6px;white-space:pre-wrap;margin-top:6px}
+.bars div{margin:6px 0}.bar{height:10px;background:#e3e8e1;border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:var(--teal)}
+.rep-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:12px 0}
+.rep-card{background:#f9fafb;border:1px solid var(--line);border-radius:8px;padding:12px}
+.q-card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px}
+.verdict-strong{color:#065f46;background:#d1fae5;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600}
+.verdict-adequate{color:#92400e;background:#fef3c7;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600}
+.verdict-weak{color:#b45309;background:#ffedd5;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600}
+.verdict-incorrect{color:#991b1b;background:#fee2e2;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600}
+small{color:var(--mut)}
+</style></head><body>
+<header><h1>InterviewIQ</h1>
+<select id="role">
+  <option>Software Engineer</option>
+  <option>Backend Developer</option>
+  <option>Frontend Developer</option>
+  <option>Data Analyst</option>
+  <option value="__custom__">+ Custom Role...</option>
+</select>
+<input id="customRole" placeholder="Enter custom role" style="display:none;width:170px" />
+<select id="level">
+  <option>Fresher (0 years)</option>
+  <option>0-1 years</option>
+  <option>1-2 years</option>
+  <option>2-3 years</option>
+  <option>3-5 years</option>
+  <option>5-8 years</option>
+  <option>8+ years</option>
+</select>
+<select id="kind">
+  <option value="Technical">Technical</option>
+  <option value="HR">HR</option>
+  <option value="Behavioural">Behavioural</option>
+  <option value="Communication">Communication</option>
+  <option value="Technical + HR">Technical + HR</option>
+  <option value="Full Placement Interview">Full Placement Interview</option>
+</select>
+<select id="domain">
+  <option>DSA</option>
+  <option>Java</option>
+  <option>Python</option>
+  <option>Web Development</option>
+  <option>DBMS</option>
+  <option>OS</option>
+  <option>Computer Networks</option>
+  <option>AI/ML</option>
+  <option>Cloud Computing</option>
+  <option>Cybersecurity</option>
+  <option>System Design</option>
+</select>
+<select id="difficulty">
+  <option>Adaptive</option>
+  <option>Beginner</option>
+  <option>Intermediate</option>
+  <option>Advanced</option>
+</select>
+<select id="duration">
+  <option value="10">10 mins</option>
+  <option value="15" selected>15 mins</option>
+  <option value="30">30 mins</option>
+  <option value="45">45 mins</option>
+</select>
+<select id="interviewLang" title="Select Interview Language">
+  <option value="English">English</option>
+  <option value="Kannada">Kannada (ಕನ್ನಡ)</option>
+  <option value="Hindi">Hindi (हिंदी)</option>
+  <option value="Tamil">Tamil (தமிழ்)</option>
+  <option value="Telugu">Telugu (తెలుగు)</option>
+  <option value="Malayalam">Malayalam (മലയാളം)</option>
+</select>
+<button class="p" id="start">Start interview</button>
+<button id="finish">Finish &amp; get report</button>
+<button id="exit" style="background:#fef2f2;border-color:#fca5a5;color:var(--bad)">Exit interview</button>
+<label class="toggle-lbl" title="Optional real-time coaching for posture and framing"><input type="checkbox" id="optVisual" checked /> Visual coaching</label>
+<div class="cam-wrap">
+  <video id="cam" autoplay muted playsinline></video>
+  <div id="coachToast" class="coach-toast"></div>
+</div></header>
+<main>
+<section><h2 id="ivTitle">Interviewer</h2><div id="log" aria-live="polite"></div>
+<textarea id="ans" rows="3" placeholder="Type your answer in selected language, English, or mixed..."></textarea>
+<div class="row"><button class="p" id="send">Send answer</button><button id="mic">🎤 Speak</button>
+<button class="k" id="kn">Explain in Language</button><button class="k" id="vocab">Key terms</button><button class="k" id="polish">Polish my answer</button></div>
+<small>Answer in your chosen language, English, or mixed. Technical correctness is judged independently of grammar.</small></section>
+<section><h2 id="ct">Coding round</h2><p id="cp" style="margin-top:0"></p>
+<div class="row" style="margin-bottom:6px">
+  <select id="cid"><option value="two_sum">Two Sum</option><option value="palindrome">Palindrome</option></select>
+  <select id="lang">
+    <option value="python">Python</option>
+    <option value="javascript">JavaScript</option>
+    <option value="java">Java</option>
+    <option value="c">C</option>
+    <option value="cpp">C++</option>
+  </select>
+  <button id="formatCode">Format</button>
+  <button id="resetCode">Reset code</button>
+</div>
+<div id="editor-container"></div>
+<div class="row">
+  <button class="p" id="run">▶ Run Code</button>
+  <button class="p" id="submit" style="background:#047857;border-color:#047857">🚀 Submit Code</button>
+  <button id="diag">AST diagnostics</button>
+  <button class="k" id="hint">ಸುಳಿವು (hint)</button>
+</div>
+<div id="out"></div></section>
+<section style="grid-column:1/-1"><h2>Performance report</h2><div id="rep"><small>Finish the interview to see your report.</small></div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);let hist=[],cur="",codeRes={passed:0,total:0},cx="",editor=null,currentCh=null,dynDifficulty="Intermediate";
+let activeStream=null,recognitionInstance=null,activeAudioPlayer=null,sessionStartTime=null;
+let poseTracker=null,poseCameraLoop=null,lastAlertTimes={},wristHistory=[],toastTimer=null;
+
+function showGentleCoachTip(msg){
+  const t=$("coachToast");
+  if(!t)return;
+  t.textContent=msg;
+  t.style.display="block";
+  if(toastTimer)clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{
+    t.style.display="none";
+  },4500);
+}
+
+function processPoseLandmarks(results){
+  if(!$("optVisual").checked)return;
+  if(!results||!results.poseLandmarks)return;
+  const lm=results.poseLandmarks;
+  const now=Date.now();
+
+  const canAlert=(key,cooldownMs=15000)=>{
+    if(!lastAlertTimes[key]||(now-lastAlertTimes[key])>cooldownMs){
+      lastAlertTimes[key]=now;
+      return true;
+    }
+    return false;
+  };
+
+  // Landmark indices: 0: nose, 11: left shoulder, 12: right shoulder, 15: left wrist, 16: right wrist
+  const nose=lm[0];
+  const lShoulder=lm[11];
+  const rShoulder=lm[12];
+  const lWrist=lm[15];
+  const rWrist=lm[16];
+
+  // 1. Frame check (whether candidate is within camera view)
+  const isPresent=nose&&(nose.visibility>0.4);
+  if(!isPresent){
+    if(canAlert("out_of_frame",12000)){
+      showGentleCoachTip("Position yourself within the camera frame.");
+    }
+    return;
+  }
+
+  // 2. Head positioning (nose too high/low or too far off-center)
+  if(nose.x<0.15||nose.x>0.85||nose.y<0.05||nose.y>0.85){
+    if(canAlert("head_pos",16000)){
+      showGentleCoachTip("Your camera angle could be improved.");
+    }
+  }
+
+  // 3. Upper-body positioning / tilt (tilt between shoulders)
+  if(lShoulder&&rShoulder&&lShoulder.visibility>0.4&&rShoulder.visibility>0.4){
+    const dy=Math.abs(lShoulder.y-rShoulder.y);
+    const dx=Math.abs(lShoulder.x-rShoulder.x);
+    if(dx>0.1&&dy/dx>0.32){
+      if(canAlert("posture_tilt",20000)){
+        showGentleCoachTip("Consider keeping your posture centered with the camera.");
+      }
+    }
+  }
+
+  // 4. Hand visibility & excessive repetitive movement tracking
+  const handsVisible=(lWrist&&lWrist.visibility>0.35)||(rWrist&&rWrist.visibility>0.35);
+  if(handsVisible){
+    // Track wrist positions over time
+    const wx=(lWrist&&lWrist.visibility>0.35?lWrist.x:(rWrist?rWrist.x:0));
+    const wy=(lWrist&&lWrist.visibility>0.35?lWrist.y:(rWrist?rWrist.y:0));
+    wristHistory.push({t:now,x:wx,y:wy});
+    if(wristHistory.length>25)wristHistory.shift();
+
+    // Check for excessive rapid oscillations
+    if(wristHistory.length>=15){
+      let distance=0;
+      for(let i=1;i<wristHistory.length;i++){
+        distance+=Math.hypot(wristHistory[i].x-wristHistory[i-1].x,wristHistory[i].y-wristHistory[i-1].y);
+      }
+      const duration=(wristHistory[wristHistory.length-1].t-wristHistory[0].t)/1000;
+      // High frequency rapid flapping/shaking
+      if(duration>0&&distance/duration>1.7){
+        if(canAlert("hand_motion",18000)){
+          showGentleCoachTip("Consider keeping gestures within the visible frame.");
+        }
+      }
+    }
+  }
+}
+
+function initPoseDetection(){
+  if(typeof Pose==="undefined")return;
+  try{
+    poseTracker=new Pose({
+      locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    });
+    poseTracker.setOptions({
+      modelComplexity:0,
+      smoothLandmarks:true,
+      enableSegmentation:false,
+      minDetectionConfidence:0.5,
+      minTrackingConfidence:0.5
+    });
+    poseTracker.onResults(processPoseLandmarks);
+
+    const videoElement=$("cam");
+    let isProcessing=false;
+
+    const frameStep=async()=>{
+      if(!activeStream||!$("optVisual").checked){
+        poseCameraLoop=requestAnimationFrame(frameStep);
+        return;
+      }
+      if(!isProcessing&&videoElement&&videoElement.readyState>=2){
+        isProcessing=true;
+        try{
+          await poseTracker.send({image:videoElement});
+        }catch(err){
+          // Non-blocking processing
+        }
+        isProcessing=false;
+      }
+      poseCameraLoop=requestAnimationFrame(frameStep);
+    };
+    poseCameraLoop=requestAnimationFrame(frameStep);
+  }catch(e){
+    console.warn("MediaPipe Pose setup note:",e);
+  }
+}
+
+function stopAllMedia(){
+  // Cancel pose tracking loop
+  if(poseCameraLoop){
+    cancelAnimationFrame(poseCameraLoop);
+    poseCameraLoop=null;
+  }
+  wristHistory=[];
+  if(toastTimer){clearTimeout(toastTimer);toastTimer=null;}
+  const t=$("coachToast");
+  if(t)t.style.display="none";
+
+  // 1. Stop all camera video/audio tracks
+  if(activeStream){
+    activeStream.getTracks().forEach(track=>{
+      try{track.stop()}catch(e){}
+    });
+    activeStream=null;
+  }
+  const cam=$("cam");
+  if(cam){
+    cam.srcObject=null;
+  }
+
+  // 2. Stop speech recognition
+  if(recognitionInstance){
+    try{recognitionInstance.abort()}catch(e){}
+    recognitionInstance=null;
+  }
+
+  // 3. Stop browser TTS and active audio playback
+  if(window.speechSynthesis){
+    try{window.speechSynthesis.cancel()}catch(e){}
+  }
+  if(activeAudioPlayer){
+    try{
+      activeAudioPlayer.pause();
+      activeAudioPlayer.currentTime=0;
+    }catch(e){}
+    activeAudioPlayer=null;
+  }
+}
+
+// Lifecycle hooks: terminate camera & audio on tab close, navigate, or refresh
+window.addEventListener("beforeunload",stopAllMedia);
+window.addEventListener("pagehide",stopAllMedia);
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden"){
+    // Stop synthesis/recognition if tab hidden
+    if(window.speechSynthesis)try{window.speechSynthesis.cancel()}catch(e){}
+    if(recognitionInstance)try{recognitionInstance.abort()}catch(e){}
+  }
+});
+const post=(u,b)=>fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)});
+const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+function say(t,c){const d=document.createElement("div");d.className="m "+c;d.textContent=t;$("log").append(d);$("log").scrollTop=1e6}
+async function speak(t){
+  try{
+    if(window.speechSynthesis)window.speechSynthesis.cancel();
+    if(activeAudioPlayer){activeAudioPlayer.pause();activeAudioPlayer=null;}
+    const r=await post("/api/tts",{text:t});
+    if(r.status===200){
+      activeAudioPlayer=new Audio(URL.createObjectURL(await r.blob()));
+      activeAudioPlayer.onended=()=>{activeAudioPlayer=null;};
+      activeAudioPlayer.play();
+      return;
+    }
+  }catch(e){}
+  if(speechSynthesis){
+    const u=new SpeechSynthesisUtterance(t);
+    u.lang="en-IN";
+    speechSynthesis.speak(u);
+  }
+}
+
+function getMonacoLang(l){
+  if(l==='python')return 'python';
+  if(l==='javascript')return 'javascript';
+  if(l==='java')return 'java';
+  if(l==='c'||l==='cpp')return 'cpp';
+  return 'python';
+}
+
+function initMonaco(){
+  require.config({paths:{vs:'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs'}});
+  require(['vs/editor/editor.main'],function(){
+    editor=monaco.editor.create($('editor-container'),{
+      value:'',
+      language:'python',
+      theme:'vs-dark',
+      automaticLayout:true,
+      lineNumbers:'on',
+      tabSize:4,
+      insertSpaces:true,
+      autoIndent:'full',
+      formatOnPaste:true,
+      formatOnType:true,
+      minimap:{enabled:false},
+      scrollBeyondLastLine:false,
+      fontSize:13,
+      fontFamily:'Consolas, "Courier New", monospace'
+    });
+    loadCh();
+  });
+}
+
+function getEditorCode(){
+  return editor?editor.getValue():'';
+}
+
+function setEditorCode(val,lang){
+  if(!editor)return;
+  const targetLang=lang||$("lang").value;
+  const model=editor.getModel();
+  monaco.editor.setModelLanguage(model,getMonacoLang(targetLang));
+  editor.setValue(val);
+}
+
+function getStarterCode(ch,lang){
+  if(!ch||!ch.starter)return '';
+  if(typeof ch.starter==='string')return ch.starter;
+  return ch.starter[lang]||ch.starter['python']||'';
+}
+
+$("lang").onchange=()=>{
+  if(!currentCh)return;
+  const l=$("lang").value;
+  setEditorCode(getStarterCode(currentCh,l),l);
+};
+
+$("resetCode").onclick=()=>{
+  if(!currentCh)return;
+  const l=$("lang").value;
+  setEditorCode(getStarterCode(currentCh,l),l);
+};
+
+$("formatCode").onclick=()=>{
+  if(!editor)return;
+  editor.getAction('editor.action.formatDocument').run();
+};
+function getRole(){
+  if($("role").value==="__custom__"){
+    return $("customRole").value.trim()||"Software Engineer";
+  }
+  return $("role").value;
+}
+$("role").onchange=()=>{
+  if($("role").value==="__custom__"){
+    $("customRole").style.display="inline-block";
+    $("customRole").focus();
+  } else {
+    $("customRole").style.display="none";
+  }
+};
+async function nextQ(){
+  const lang=$("interviewLang").value;
+  const payload={
+    role:getRole(),
+    kind:$("kind").value,
+    level:$("level").value,
+    domain:$("domain").value,
+    difficulty:$("difficulty").value,
+    current_difficulty:dynDifficulty,
+    duration:parseInt($("duration").value,10)||15,
+    interview_language:lang,
+    history:hist
+  };
+  const r=await(await post("/api/question",payload)).json();
+  cur=r.question;
+  if(r.next_difficulty){
+    dynDifficulty=r.next_difficulty;
+  }
+  say(cur,"iv");
+  speak(cur);
+}
+$("start").onclick=async()=>{
+  stopAllMedia();
+  hist=[];$("log").innerHTML="";$("rep").innerHTML="";sessionStartTime=Date.now();
+  dynDifficulty=$("difficulty").value==="Adaptive"?"Intermediate":$("difficulty").value;
+  try{
+    activeStream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+    $("cam").srcObject=activeStream;
+  }catch(e){
+    console.warn("Camera permission not granted or device unavailable:",e);
+    say("ℹ️ Camera access was not enabled or was denied. You can continue the interview without video.","as");
+  }
+  loadCh();
+  nextQ();
+};
+$("send").onclick=async()=>{
+  const a=$("ans").value.trim();if(!a||!cur)return;
+  $("send").disabled=true;
+  try{
+    const vRes=await post("/api/validate-answer",{
+      question:cur,
+      answer:a,
+      role:getRole(),
+      level:$("level").value,
+      kind:$("kind").value,
+      domain:$("domain").value,
+      interview_language:$("interviewLang").value
+    });
+    const v=await vRes.json();
+    if(!v.valid){
+      const msg=v.message||"Answer is insufficient or off-topic. Please retry.";
+      say("⚠️ "+msg,"warn-box");
+      $("send").disabled=false;
+      return;
+    }
+  }catch(e){
+    console.error("Validation error:",e);
+  }
+  $("send").disabled=false;
+  say(a,"me");
+  hist.push({q:cur,a});
+  $("ans").value="";
+  cur="";
+  nextQ();
+};
+$("mic").onclick=()=>{
+  const S=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!S)return alert("Speech recognition needs Chrome/Edge.");
+  if(recognitionInstance){
+    try{recognitionInstance.stop();}catch(e){}
+    recognitionInstance=null;
+    $("mic").textContent="🎤 Speak";
+    return;
+  }
+  try{
+    const r=new S();
+    recognitionInstance=r;
+    const lmap={"English":"en-IN","Kannada":"kn-IN","Hindi":"hi-IN","Tamil":"ta-IN","Telugu":"te-IN","Malayalam":"ml-IN"};
+    r.lang=lmap[$("interviewLang").value]||"en-IN";
+    $("mic").textContent="⏹ Stop";
+    r.onresult=e=>{$("ans").value+=" "+e.results[0][0].transcript;};
+    r.onerror=e=>{console.warn("Speech recognition error:",e);$("mic").textContent="🎤 Speak";recognitionInstance=null;};
+    r.onend=()=>{recognitionInstance=null;$("mic").textContent="🎤 Speak";};
+    r.start();
+  }catch(e){
+    console.error("Speech recognition start failed:",e);
+    recognitionInstance=null;
+    $("mic").textContent="🎤 Speak";
+  }
+};
+async function assist(mode,text,ctx){const r=await(await post("/api/assist",{mode,text,context:ctx||"",lang:$("interviewLang").value})).json();say(r.reply,"as")}
+$("kn").onclick=()=>cur&&assist("explain",cur);
+$("vocab").onclick=()=>cur&&assist("vocab",cur);
+$("polish").onclick=()=>$("ans").value.trim()&&assist("polish",$("ans").value,cur);
+async function loadCh(){
+  const c=await(await fetch("/api/challenge/"+$("cid").value)).json();
+  currentCh=c;
+  $("ct").textContent="Coding: "+c.title;
+  $("cp").textContent=c.prompt;
+  const l=$("lang").value;
+  setEditorCode(getStarterCode(c,l),l);
+  $("out").innerHTML="";
+}
+$("cid").onchange=loadCh;
+$("hint").onclick=()=>assist("hint",$("cp").textContent,getEditorCode());
+async function executeCode(mode){
+  const code=getEditorCode();
+  const lang=$("lang").value;
+  $("out").innerHTML=`<div class="term-box"><span style="color:#9ca3af">Executing ${mode==='submit'?'all test cases (sample + hidden)':'sample test cases'}...</span></div>`;
+  $("run").disabled=true;
+  $("submit").disabled=true;
+
+  try{
+    const r=await(await post("/api/run",{challenge_id:$("cid").value,code,language:lang,mode})).json();
+    codeRes=r;
+    renderTerminalOutput(r);
+  }catch(e){
+    $("out").innerHTML=`<div class="term-box"><div class="badge-fail">Network/Server Error</div><pre class="term-err">${esc(String(e))}</pre></div>`;
+  }finally{
+    $("run").disabled=false;
+    $("submit").disabled=false;
+  }
+}
+
+function renderTerminalOutput(r){
+  const isSubmit=r.mode==='submit';
+  const allPassed=r.passed===r.total&&r.total>0;
+  const badgeClass=allPassed?'badge-pass':(r.error_type?'badge-fail':'badge-fail');
+  const badgeText=r.error_type||(allPassed?(isSubmit?'Accepted (All Passed)':'Sample Tests Passed'):`${r.passed}/${r.total} Tests Passed`);
+
+  let html=`<div class="term-box">`;
+  html+=`<div class="term-hdr">
+    <span>${isSubmit?'Submit Results':'Run Results'}</span>
+    <div>
+      <span class="${badgeClass}">${esc(badgeText)}</span>
+      <span class="badge-info" style="margin-left:6px">${r.execution_time_ms||0} ms</span>
+    </div>
+  </div>`;
+
+  if(r.compilation_error){
+    html+=`<div style="color:#f87171;font-weight:600;margin-bottom:4px">Compilation Error:</div><pre class="term-err">${esc(r.compilation_error)}</pre>`;
+  } else if(r.runtime_error){
+    html+=`<div style="color:#f87171;font-weight:600;margin-bottom:4px">${esc(r.error_type||'Runtime Error')}:</div><pre class="term-err">${esc(r.runtime_error)}</pre>`;
+  } else if(r.error){
+    html+=`<pre class="term-err">${esc(r.error)}</pre>`;
+  }
+
+  if(r.cases&&r.cases.length){
+    html+=`<div style="margin-top:8px">`;
+    r.cases.forEach((c,i)=>{
+      const caseClass=c.ok?'c-ok':'c-fail';
+      const icon=c.ok?'✓':'✗';
+      const tag=c.hidden?'[Hidden Test]':'[Sample Test]';
+      html+=`<div class="term-case ${caseClass}">
+        <div style="font-weight:600;display:flex;justify-content:space-between">
+          <span>${icon} Case ${i+1} <span style="font-weight:normal;opacity:0.8">${tag}</span></span>
+          <span style="color:${c.ok?'#34d399':'#f87171'}">${c.ok?'PASSED':'FAILED'}</span>
+        </div>
+        ${c.input?`<pre><b>Input:</b>    ${esc(c.input)}</pre>`:''}
+        <pre><b>Expected:</b> ${esc(c.expected)}</pre>
+        <pre><b>Output:</b>   ${esc(c.got)}</pre>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
+  html+=`</div>`;
+  $("out").innerHTML=html;
+}
+
+$("run").onclick=()=>executeCode('run');
+$("submit").onclick=()=>executeCode('submit');
+$("diag").onclick=async()=>{
+  const code=getEditorCode();
+  const lang=$("lang").value;
+  const r=await(await post("/api/diagnose",{code,language:lang})).json();
+  cx=r.complexity||"";
+  $("out").innerHTML=`<div class="term-box">
+    <div class="term-hdr"><span>AST Diagnostics &amp; Analysis</span></div>
+    ${r.issues.map(i=>`<div style="margin:4px 0" class="${i.level=="ok"?"ok":i.level=="error"?"no":"warn"}">• ${esc(i.msg)}</div>`).join("")}
+    ${cx?`<div style="margin-top:6px;color:#93c5fd">Estimated Complexity: <b>${esc(cx)}</b></div>`:''}
+  </div>`;
+};
+$("finish").onclick=async()=>{
+  if(!hist.length)return alert("Answer at least one question first.");
+  stopAllMedia();
+  $("rep").innerHTML=`<div class="term-box"><span style="color:#93c5fd">Evaluating interview performance and preparing detailed feedback...</span></div>`;
+
+  const elapsedSecs=sessionStartTime?((Date.now()-sessionStartTime)/1000):(hist.length*75);
+  const durationMins=parseInt($("duration").value,10)||15;
+  const isVisual=$("optVisual")&&$("optVisual").checked;
+
+  try{
+    const r=await(await post("/api/evaluate",{
+      history:hist,
+      tests_passed:codeRes.passed||0,
+      tests_total:codeRes.total||0,
+      complexity:cx,
+      coding_cases:codeRes.cases||[],
+      duration_minutes:durationMins,
+      elapsed_seconds:elapsedSecs,
+      visual_coaching_enabled:isVisual,
+      interview_language:$("interviewLang").value
+    })).json();
+
+    const bar=(n,v)=>v==null?"":`<div><div style="display:flex;justify-content:space-between"><span>${n}</span><b>${v}/100</b></div><div class="bar"><i style="width:${v}%"></i></div></div>`;
+    const sc=r.scores||{};
+
+    let html=`
+    <div class="rep-grid">
+      <div class="rep-card">
+        <h3 style="margin-top:0;font-size:16px">Overall Performance: <b style="color:var(--teal)">${r.overall}/100</b></h3>
+        <div class="bars">
+          ${bar("Technical Knowledge",sc.technical_knowledge)}
+          ${bar("Problem-Solving Ability",sc.problem_solving)}
+          ${bar("Coding Performance",sc.coding_performance)}
+          ${bar("Communication Skills",sc.communication_skills)}
+          ${bar("English Proficiency",sc.english_proficiency)}
+          ${bar("Time Management",sc.time_management)}
+          ${sc.visual_presentation!=null?bar("Visual Presentation (Optional)",sc.visual_presentation):''}
+        </div>
+        <p style="margin:8px 0 0;font-size:12px;color:var(--mut)">Filler Words: ${r.speech_stats.filler_words_total} (${r.speech_stats.filler_rate_pct}%) · Avg Words/Answer: ${r.speech_stats.words_per_answer}</p>
+      </div>
+
+      <div class="rep-card">
+        <h3 style="margin-top:0;font-size:16px">Strengths &amp; Improvement</h3>
+        <div style="margin-bottom:8px">
+          <b style="color:var(--teal)">Key Strengths:</b>
+          ${(r.strengths||[]).map(s=>`<div class="ok" style="font-size:13px;margin:2px 0">• ${esc(s)}</div>`).join("")}
+        </div>
+        <div style="margin-bottom:8px">
+          <b style="color:#b45309">Areas for Improvement:</b>
+          ${(r.areas_for_improvement||[]).map(a=>`<div class="warn" style="font-size:13px;margin:2px 0">• ${esc(a)}</div>`).join("")}
+        </div>
+        ${r.incorrect_technical_concepts&&r.incorrect_technical_concepts.length?`
+        <div style="margin-top:6px">
+          <b style="color:var(--bad)">Identified Technical Misconceptions:</b>
+          ${r.incorrect_technical_concepts.map(c=>`<div class="no" style="font-size:13px;margin:2px 0">⚠ ${esc(c)}</div>`).join("")}
+        </div>`:''}
+      </div>
+    </div>`;
+
+    if(r.coding_test_cases&&r.coding_test_cases.total>0){
+      const cc=r.coding_test_cases;
+      html+=`<div class="rep-card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <b>Coding Test-Case Results</b>
+          <span class="${cc.passed===cc.total?'badge-pass':'badge-fail'}">${cc.passed}/${cc.total} Tests Passed</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${(cc.cases||[]).map((c,i)=>`<span class="${c.ok?'badge-pass':'badge-fail'}">${c.ok?'✓':'✗'} Case ${i+1} ${c.hidden?'(Hidden)':''}</span>`).join("")}
+        </div>
+      </div>`;
+    }
+
+    if(r.question_evaluations&&r.question_evaluations.length){
+      html+=`<div style="margin:12px 0"><h3 style="margin:0 0 8px;font-size:15px">Individual Question Evaluations</h3>`;
+      r.question_evaluations.forEach((q,i)=>{
+        const vClass="verdict-"+(q.verdict||"adequate").toLowerCase();
+        html+=`<div class="q-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <b>Q${i+1}: ${esc(q.question)}</b>
+            <span class="${vClass}">${esc(q.verdict||"Evaluated")}</span>
+          </div>
+          <div style="color:var(--ink);font-style:italic;margin-bottom:6px">"${esc(q.candidate_answer)}"</div>
+          <div style="font-size:13px;color:#0f766e"><b>Technical Analysis:</b> ${esc(q.technical_feedback||'')}</div>
+          <div style="font-size:13px;color:#4b5563"><b>Communication / Phrasing:</b> ${esc(q.communication_feedback||'')}</div>
+        </div>`;
+      });
+      html+=`</div>`;
+    }
+
+    if(r.recommendations&&r.recommendations.length){
+      html+=`<div class="rep-card">
+        <h4 style="margin:0 0 6px;color:#1e40af">Personalised Recommendations:</h4>
+        ${r.recommendations.map(rec=>`<div style="margin:3px 0;font-size:13px">💡 ${esc(rec)}</div>`).join("")}
+      </div>`;
+    }
+
+    html+=`<div style="margin-top:8px"><small>${esc(r.note)}</small></div>`;
+
+    $("rep").innerHTML=html;
+    const h=JSON.parse(localStorage.getItem("iiq")||"[]");h.push({t:Date.now(),o:r.overall});localStorage.setItem("iiq",JSON.stringify(h.slice(-20)));
+  }catch(err){
+    console.error("Evaluation error:",err);
+    $("rep").innerHTML=`<div class="warn-box">Error generating performance report. Please retry.</div>`;
+  }
+};
+
+$("exit").onclick=()=>{
+  if(confirm("Are you sure you want to exit the interview? Active camera and speech session will terminate.")){
+    stopAllMedia();
+    say("🛑 Interview session ended by candidate. Camera and microphone have been stopped.","warn-box");
+  }
+};
+initMonaco();
+initPoseDetection();
+</script></body></html>

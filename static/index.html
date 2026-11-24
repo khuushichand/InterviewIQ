@@ -1,0 +1,77 @@
+<!doctype html><html><head><meta charset="utf-8"><title>InterviewIQ</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1a1a2e;--card:#f4f5fa;--ac:#4f46e5}
+@media(prefers-color-scheme:dark){:root{--bg:#12121c;--fg:#eee;--card:#1e1e2e;--ac:#818cf8}}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+header{padding:10px 16px;background:var(--ac);color:#fff;display:flex;justify-content:space-between;align-items:center}
+main{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px;height:calc(100vh - 52px)}
+@media(max-width:800px){main{grid-template-columns:1fr;height:auto}}
+.col{display:flex;flex-direction:column;gap:10px;min-height:0}.card{background:var(--card);border-radius:10px;padding:10px}
+#log{flex:1;overflow:auto;min-height:200px}.m{margin:6px 0;padding:6px 10px;border-radius:8px}
+.i{background:#4f46e51f}.c{background:#10b9811f;text-align:right}
+button,select,input,textarea{font:inherit;padding:6px 10px;border-radius:6px;border:1px solid #8884;background:var(--bg);color:var(--fg)}
+button{background:var(--ac);color:#fff;border:0;cursor:pointer}button.s{background:#6b7280}
+#ed{height:260px;border-radius:8px;overflow:hidden}pre{white-space:pre-wrap;margin:4px 0}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+</style></head><body>
+<header><b>InterviewIQ</b><span>English interview · Kannada on demand</span></header>
+<main>
+<div class="col">
+ <div class="card row">
+  <select id="role"><option>Software Engineer</option><option>Data Analyst</option><option>Web Developer</option></select>
+  <select id="level"><option>Fresher</option><option>1-2 yrs</option></select>
+  <select id="kind"><option value="technical">Technical</option><option value="HR">HR</option></select>
+  <button onclick="start()">Start interview</button></div>
+ <div class="card" id="log"></div>
+ <div class="card row"><input id="ans" style="flex:1" placeholder="Type or use mic (English)…" onkeydown="if(event.key=='Enter')send()">
+  <button class="s" id="mic" onclick="toggleMic()">🎤</button><button onclick="send()">Send</button></div>
+ <div class="card"><b>ಕನ್ನಡ Assistant</b> (private, interviewer stays in English)
+  <div class="row" style="margin:6px 0"><button class="s" onclick="assist('explain')">Explain last question</button>
+  <button class="s" onclick="assist('term')">Explain term…</button><button class="s" onclick="assist('hint')">Coding hint</button></div>
+  <pre id="kn">—</pre></div>
+</div>
+<div class="col">
+ <div class="card row"><select id="ch" onchange="loadCh()"></select><button onclick="run()">Run tests</button>
+  <button onclick="finish()">End &amp; report</button></div>
+ <div class="card" id="prompt"></div><div id="ed"></div>
+ <div class="card"><b>Test results &amp; diagnostics</b><pre id="out">—</pre></div>
+ <div class="card"><b>Report</b><pre id="rep">—</pre></div>
+</div></main>
+<script>
+let hist=[],chs=[],ed,lastRun={passed:0,total:0},spoken=0,t0=0,rec=null;
+const $=id=>document.getElementById(id);
+const post=(u,b)=>fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+require.config({paths:{vs:'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs'}});
+require(['vs/editor/editor.main'],async()=>{
+ ed=monaco.editor.create($('ed'),{language:'python',automaticLayout:true,minimap:{enabled:false},theme:matchMedia('(prefers-color-scheme:dark)').matches?'vs-dark':'vs'});
+ chs=await (await fetch('/api/challenges')).json();
+ $('ch').innerHTML=chs.map(c=>`<option value="${c.id}">${c.title}</option>`).join('');loadCh();});
+function cur(){return chs.find(c=>c.id==$('ch').value)}
+function loadCh(){const c=cur();$('prompt').textContent=c.prompt;ed.setValue(c.starter)}
+function add(role,text){hist.push({role,text});const d=document.createElement('div');d.className='m '+(role=='interviewer'?'i':'c');
+ d.textContent=(role=='interviewer'?'🤖 ':'')+text;$('log').appendChild(d);$('log').scrollTop=1e9}
+async function speak(text){try{const r=await post('/api/tts',{text});
+ if(r.status==200){new Audio(URL.createObjectURL(await r.blob())).play();return}}catch(e){}
+ speechSynthesis.speak(new SpeechSynthesisUtterance(text))}
+async function ask(){const r=await post('/api/interview/chat',{history:hist,role:$('role').value,level:$('level').value,kind:$('kind').value});
+ const {reply}=await r.json();add('interviewer',reply);speak(reply)}
+function start(){hist=[];$('log').innerHTML='';spoken=0;ask()}
+function send(){const t=$('ans').value.trim();if(!t)return;$('ans').value='';add('candidate',t);ask()}
+function toggleMic(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return alert('Use Chrome for mic');
+ if(rec){rec.stop();return}rec=new SR();rec.lang='en-IN';rec.interimResults=false;t0=Date.now();
+ rec.onresult=e=>{$('ans').value=e.results[0][0].transcript};
+ rec.onend=()=>{spoken+=(Date.now()-t0)/1000;rec=null;$('mic').textContent='🎤'};rec.start();$('mic').textContent='⏹'}
+async function assist(kind){const last=[...hist].reverse().find(m=>m.role=='interviewer');
+ let text=last?last.text:'';if(kind=='term'){text=prompt('Which term/concept?')||text}
+ if(kind=='hint')text=cur().prompt+'\nCode so far:\n'+ed.getValue();
+ $('kn').textContent='…';$('kn').textContent=(await (await post('/api/assist',{text,kind})).json()).answer}
+async function run(){const r=await (await post('/api/code/run',{challenge_id:cur().id,code:ed.getValue()})).json();lastRun=r;
+ $('out').textContent=`Passed ${r.passed}/${r.total}\nComplexity: ${r.est_complexity||'-'}\n`+(r.diagnostics||[]).map(d=>'• '+d).join('\n')+(r.error?'\n'+r.error:'')}
+async function finish(){$('rep').textContent='Analysing…';
+ const r=await (await post('/api/report',{history:hist,code_passed:lastRun.passed,code_total:lastRun.total,seconds_spoken:spoken})).json();
+ $('rep').textContent=`Technical: ${r.technical}  (independent of English)\nCoding: ${r.coding??'n/a'}\nCommunication: ${r.communication}\nEnglish: ${r.english}\n`+
+ `Fillers: ${r.filler_rate_pct}% ${JSON.stringify(r.fillers)}  Pace: ${r.wpm??'n/a'} wpm\n\nStrengths:\n`+r.strengths.map(s=>'• '+s).join('\n')+
+ `\n\nImprove:\n`+r.improvements.map(s=>'• '+s).join('\n')+`\n\nBetter phrasing:\n`+(r.better_phrasing||[]).map(s=>'• '+s).join('\n')+`\n\n${r.note}`}
+</script></body></html>
