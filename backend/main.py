@@ -15,8 +15,10 @@ from backend.gemini_service import (
     get_client,
     MODEL_NAME
 )
+from backend.resume import resume_router
 
 app = FastAPI(title="InterviewIQ")
+app.include_router(resume_router)
 MODEL = MODEL_NAME
 
 def llm(prompt: str, system_instruction: str | None = None, response_mime_type: str | None = None) -> str | None:
