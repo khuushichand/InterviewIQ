@@ -45,6 +45,12 @@ textarea{width:100%;resize:vertical}
 .verdict-adequate{color:#92400e;background:#fef3c7;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600}
 .verdict-weak{color:#b45309;background:#ffedd5;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600}
 .verdict-incorrect{color:#991b1b;background:#fee2e2;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600}
+.chip{display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px;margin:2px;background:#e2e8f0;color:#1e293b}
+.chip-match{background:#d1fae5;color:#065f46;font-weight:600}
+.chip-gap{background:#fee2e2;color:#991b1b;font-weight:600}
+.chip-bonus{background:#dbeafe;color:#1e40af}
+.resume-box{background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:12px;margin-bottom:12px}
+.res-active-badge{background:#0f766e;color:#fff;font-size:11px;padding:3px 8px;border-radius:6px;font-weight:600}
 small{color:var(--mut)}
 </style></head><body>
 <header><h1>InterviewIQ</h1>
@@ -115,6 +121,36 @@ small{color:var(--mut)}
   <div id="coachToast" class="coach-toast"></div>
 </div></header>
 <main>
+<section style="grid-column:1/-1;background:#f8fafc;border:1px solid #cbd5e1" id="resumeSection">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <h2 style="margin:0;font-size:16px;color:#0f766e">📄 Resume Analyzer &amp; Personalized Interview</h2>
+    <div id="resumeActiveIndicator" style="display:none"><span class="res-active-badge">✓ Resume Context Active</span></div>
+  </div>
+  <p style="margin:4px 0 10px;font-size:13px;color:var(--mut)">Upload your resume (.pdf or .docx) to evaluate readiness, match skills, and generate tailored interview questions based on your actual projects and experience.</p>
+  
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:end">
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:3px">Resume File (.pdf, .docx, max 5MB)</label>
+      <input type="file" id="resumeFile" accept=".pdf,.docx" style="width:100%" />
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:3px">Target Role (Optional)</label>
+      <input type="text" id="targetRole" placeholder="e.g. Backend Developer" style="width:100%" />
+    </div>
+    <div style="grid-column:span 2">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:3px">Job Description / Requirements (Optional)</label>
+      <textarea id="jobDesc" rows="2" placeholder="Paste job requirements or key skills for targeted matching..." style="width:100%;font-size:13px"></textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="p" id="analyzeBtn" style="white-space:nowrap">Analyze Resume</button>
+      <button class="p" id="startWithResumeBtn" style="background:#047857;border-color:#047857;display:none;white-space:nowrap">🚀 Start Interview with Resume</button>
+      <button id="clearResumeBtn" style="display:none;color:var(--bad)">Remove</button>
+    </div>
+  </div>
+  
+  <div id="resumeStatusMsg" style="margin-top:8px;font-size:13px"></div>
+  <div id="resumeResultContainer" style="display:none;margin-top:12px;border-top:1px solid var(--line);padding-top:12px"></div>
+</section>
 <section><h2 id="ivTitle">Interviewer</h2><div id="log" aria-live="polite"></div>
 <textarea id="ans" rows="3" placeholder="Type your answer in selected language, English, or mixed..."></textarea>
 <div class="row"><button class="p" id="send">Send answer</button><button id="mic">🎤 Speak</button>
@@ -144,9 +180,10 @@ small{color:var(--mut)}
 <section style="grid-column:1/-1"><h2>Performance report</h2><div id="rep"><small>Finish the interview to see your report.</small></div></section>
 </main>
 <script>
-const $=id=>document.getElementById(id);let hist=[],cur="",codeRes={passed:0,total:0},cx="",editor=null,currentCh=null,dynDifficulty="Intermediate";
+const $=id=>document.getElementById(id);let hist=[],cur="",askedQuestions=[],codeRes={passed:0,total:0},cx="",editor=null,currentCh=null,dynDifficulty="Intermediate";
 let activeStream=null,recognitionInstance=null,activeAudioPlayer=null,sessionStartTime=null;
 let poseTracker=null,poseCameraLoop=null,lastAlertTimes={},wristHistory=[],toastTimer=null;
+let activeResumeAnalysis=null,activeResumeProfile=null,activeIdentifiedGaps=[];
 
 function showGentleCoachTip(msg){
   const t=$("coachToast");
@@ -437,10 +474,16 @@ async function nextQ(){
     current_difficulty:dynDifficulty,
     duration:parseInt($("duration").value,10)||15,
     interview_language:lang,
-    history:hist
+    history:hist,
+    asked_questions:askedQuestions,
+    resume_profile:activeResumeProfile||null,
+    identified_gaps:activeIdentifiedGaps||[]
   };
   const r=await(await post("/api/question",payload)).json();
   cur=r.question;
+  if(cur && !askedQuestions.includes(cur)){
+    askedQuestions.push(cur);
+  }
   if(r.next_difficulty){
     dynDifficulty=r.next_difficulty;
   }
@@ -449,7 +492,7 @@ async function nextQ(){
 }
 $("start").onclick=async()=>{
   stopAllMedia();
-  hist=[];$("log").innerHTML="";$("rep").innerHTML="";sessionStartTime=Date.now();
+  hist=[];askedQuestions=[];$("log").innerHTML="";$("rep").innerHTML="";sessionStartTime=Date.now();
   dynDifficulty=$("difficulty").value==="Adaptive"?"Intermediate":$("difficulty").value;
   try{
     activeStream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
@@ -484,12 +527,17 @@ $("send").onclick=async()=>{
   }catch(e){
     console.error("Validation error:",e);
   }
-  $("send").disabled=false;
-  say(a,"me");
-  hist.push({q:cur,a});
-  $("ans").value="";
-  cur="";
-  nextQ();
+  try{
+    say(a,"me");
+    hist.push({q:cur,a});
+    $("ans").value="";
+    cur="";
+    await nextQ();
+  }catch(e){
+    console.error("Answer submission or question progression error:",e);
+  }finally{
+    $("send").disabled=false;
+  }
 };
 $("mic").onclick=()=>{
   const S=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -628,7 +676,9 @@ $("finish").onclick=async()=>{
       duration_minutes:durationMins,
       elapsed_seconds:elapsedSecs,
       visual_coaching_enabled:isVisual,
-      interview_language:$("interviewLang").value
+      interview_language:$("interviewLang").value,
+      resume_profile:activeResumeProfile||null,
+      resume_analysis:activeResumeAnalysis||null
     })).json();
 
     const bar=(n,v)=>v==null?"":`<div><div style="display:flex;justify-content:space-between"><span>${n}</span><b>${v}/100</b></div><div class="bar"><i style="width:${v}%"></i></div></div>`;
@@ -705,6 +755,23 @@ $("finish").onclick=async()=>{
       </div>`;
     }
 
+    if(r.resume_alignment){
+      const ra=r.resume_alignment;
+      html+=`<div class="rep-card" style="margin-top:12px;border-left:4px solid var(--teal)">
+        <h3 style="margin:0 0 6px;font-size:16px;color:var(--teal)">Resume Claim Alignment &amp; Verification: <b>${ra.claim_verification_score}/100</b></h3>
+        <p style="margin:4px 0 8px;font-size:13px;color:var(--ink)">${esc(ra.resume_feedback||"")}</p>
+        <div style="margin-top:6px">
+          <b style="font-size:12px;color:#065f46">Verified Skills Substantiated in Interview:</b><br/>
+          ${(ra.verified_skills||[]).length?ra.verified_skills.map(s=>`<span class="chip chip-match">✓ ${esc(s)}</span>`).join(""):`<span style="font-size:12px;color:var(--mut)">None specifically substantiated</span>`}
+        </div>
+        ${(ra.unsubstantiated_or_weak_claims||[]).length?`
+        <div style="margin-top:8px">
+          <b style="font-size:12px;color:#991b1b">Unsubstantiated or Shallow Claims:</b><br/>
+          ${ra.unsubstantiated_or_weak_claims.map(c=>`<span class="chip chip-gap">⚠ ${esc(c)}</span>`).join("")}
+        </div>`:''}
+      </div>`;
+    }
+
     html+=`<div style="margin-top:8px"><small>${esc(r.note)}</small></div>`;
 
     $("rep").innerHTML=html;
@@ -721,6 +788,191 @@ $("exit").onclick=()=>{
     say("🛑 Interview session ended by candidate. Camera and microphone have been stopped.","warn-box");
   }
 };
+function setResumeActive(active){
+  const badge=$("resumeActiveIndicator");
+  const clearBtn=$("clearResumeBtn");
+  const startBtn=$("startWithResumeBtn");
+  if(active&&activeResumeProfile){
+    if(badge)badge.style.display="inline-block";
+    if(clearBtn)clearBtn.style.display="inline-block";
+    if(startBtn)startBtn.style.display="inline-block";
+  } else {
+    if(badge)badge.style.display="none";
+    if(clearBtn)clearBtn.style.display="none";
+    if(startBtn)startBtn.style.display="none";
+  }
+}
+
+function clearResumeState(){
+  activeResumeAnalysis=null;
+  activeResumeProfile=null;
+  activeIdentifiedGaps=[];
+  $("resumeFile").value="";
+  $("resumeStatusMsg").innerHTML="";
+  $("resumeResultContainer").innerHTML="";
+  $("resumeResultContainer").style.display="none";
+  setResumeActive(false);
+}
+
+$("clearResumeBtn").onclick=clearResumeState;
+
+function renderResumeAnalysis(data){
+  const res=$("resumeResultContainer");
+  res.style.display="block";
+
+  const prof=data.resume_profile||{};
+  const contact=prof.contact||{};
+  const skills=prof.skills||{};
+  const sa=data.skills_analysis||{};
+  const sb=data.score_breakdown||{};
+
+  const bar=(label,val)=>val!=null?`<div><div style="display:flex;justify-content:space-between;font-size:12px"><span>${label}</span><b>${val}/100</b></div><div class="bar" style="height:6px"><i style="width:${val}%"></i></div></div>`:'';
+
+  let html=`<div class="rep-grid" style="margin:0">
+    <div class="rep-card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0;font-size:15px">${contact.name?esc(contact.name):"Candidate"} - Readiness</h3>
+        <span style="font-size:18px;font-weight:700;color:var(--teal)">${data.overall_score}/100</span>
+      </div>
+      <div style="font-size:12px;color:var(--mut);margin:4px 0 8px">
+        ${data.target_role?`Target Role: <b>${esc(data.target_role)}</b> · `:''}${prof.inferred_experience_level?`Level: ${esc(prof.inferred_experience_level)}`:''}
+      </div>
+      <div class="bars" style="margin-top:8px">
+        ${bar("Resume Quality",sb.resume_quality)}
+        ${bar("Skill Match",sb.skill_match)}
+        ${bar("Experience Relevance",sb.experience_relevance)}
+        ${bar("Project Depth",sb.project_depth)}
+        ${bar("Role Fit",sb.role_fit)}
+        ${bar("Education Fit",sb.education_fit)}
+      </div>
+    </div>
+
+    <div class="rep-card">
+      <h3 style="margin:0 0 6px;font-size:15px">Skills Breakdown</h3>
+      ${(sa.matched_skills||[]).length?`
+      <div style="margin-bottom:6px">
+        <span style="font-size:11px;font-weight:600;color:#065f46">MATCHED SKILLS:</span><br/>
+        ${sa.matched_skills.map(s=>`<span class="chip chip-match">✓ ${esc(s)}</span>`).join("")}
+      </div>`:''}
+
+      ${(sa.missing_critical_skills||[]).length?`
+      <div style="margin-bottom:6px">
+        <span style="font-size:11px;font-weight:600;color:#991b1b">CRITICAL GAPS:</span><br/>
+        ${sa.missing_critical_skills.map(s=>`<span class="chip chip-gap">⚠ ${esc(s)}</span>`).join("")}
+      </div>`:''}
+
+      ${(sa.bonus_skills||[]).length?`
+      <div style="margin-bottom:6px">
+        <span style="font-size:11px;font-weight:600;color:#1e40af">ADDITIONAL SKILLS:</span><br/>
+        ${sa.bonus_skills.map(s=>`<span class="chip chip-bonus">+ ${esc(s)}</span>`).join("")}
+      </div>`:''}
+
+      ${!sa.matched_skills?.length&&!sa.missing_critical_skills?.length?`
+      <div style="margin-bottom:6px">
+        <span style="font-size:11px;font-weight:600;color:var(--ink)">EXTRACTED SKILLS:</span><br/>
+        ${[...(skills.languages||[]),...(skills.frameworks||[]),...(skills.tools_and_cloud||[]),...(skills.databases||[])].map(s=>`<span class="chip">${esc(s)}</span>`).join("")||'<span style="font-size:12px;color:var(--mut)">None identified</span>'}
+      </div>`:''}
+    </div>
+  </div>`;
+
+  if((data.key_strengths||[]).length||(data.identified_gaps||[]).length){
+    html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+      ${(data.key_strengths||[]).length?`
+      <div class="rep-card">
+        <b style="font-size:12px;color:var(--teal)">Key Strengths:</b>
+        ${data.key_strengths.map(s=>`<div class="ok" style="font-size:12px;margin:2px 0">• ${esc(s)}</div>`).join("")}
+      </div>`:''}
+      ${(data.identified_gaps||[]).length?`
+      <div class="rep-card">
+        <b style="font-size:12px;color:#b45309">Identified Focus Areas / Gaps:</b>
+        ${data.identified_gaps.map(g=>`<div class="warn" style="font-size:12px;margin:2px 0">• ${esc(g)}</div>`).join("")}
+      </div>`:''}
+    </div>`;
+  }
+
+  if((prof.projects||[]).length){
+    html+=`<div style="margin-top:10px">
+      <b style="font-size:12px;color:var(--ink)">Identified Projects (Targeted for Interview Questions):</b>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+        ${prof.projects.map(p=>`<span class="chip" style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd">📁 <b>${esc(p.name)}</b>${p.technologies?.length?` (${esc(p.technologies.slice(0,3).join(", "))})`:''}</span>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  res.innerHTML=html;
+}
+
+$("analyzeBtn").onclick=async()=>{
+  const fileInput=$("resumeFile");
+  if(!fileInput.files||!fileInput.files.length){
+    $("resumeStatusMsg").innerHTML=`<span class="no">Please select a .pdf or .docx resume file.</span>`;
+    return;
+  }
+  const file=fileInput.files[0];
+  const maxBytes=5*1024*1024;
+  if(file.size>maxBytes){
+    $("resumeStatusMsg").innerHTML=`<span class="no">File size exceeds maximum allowed 5 MB limit.</span>`;
+    return;
+  }
+
+  const formData=new FormData();
+  formData.append("file",file);
+  const targetRole=$("targetRole").value.trim();
+  const jobDesc=$("jobDesc").value.trim();
+  if(targetRole)formData.append("target_role",targetRole);
+  if(jobDesc)formData.append("job_description",jobDesc);
+
+  $("analyzeBtn").disabled=true;
+  $("resumeStatusMsg").innerHTML=`<span style="color:#0f766e">Analyzing resume and matching skills with AI...</span>`;
+
+  try{
+    const res=await fetch("/api/resume/analyze",{
+      method:"POST",
+      body:formData
+    });
+
+    if(!res.ok){
+      const err=await res.json().catch(()=>({detail:"Analysis request failed"}));
+      throw new Error(err.detail||`HTTP ${res.status}`);
+    }
+
+    const data=await res.json();
+    activeResumeAnalysis=data;
+    activeResumeProfile=data.resume_profile||null;
+    activeIdentifiedGaps=data.identified_gaps||[];
+
+    $("resumeStatusMsg").innerHTML=`<span class="ok">✓ Resume analyzed successfully. Readiness score: <b>${data.overall_score}/100</b>. Click "Start Interview with Resume" below to begin.</span>`;
+    renderResumeAnalysis(data);
+    setResumeActive(true);
+
+    // If target role was given or inferred, sync header role if appropriate
+    if(targetRole){
+      const opts=[...$("role").options].map(o=>o.value);
+      if(opts.includes(targetRole)){
+        $("role").value=targetRole;
+        $("customRole").style.display="none";
+      } else {
+        $("role").value="__custom__";
+        $("customRole").style.display="inline-block";
+        $("customRole").value=targetRole;
+      }
+    }
+  }catch(e){
+    console.error("Resume analysis error:",e);
+    $("resumeStatusMsg").innerHTML=`<span class="no">Error analyzing resume: ${esc(e.message||String(e))}</span>`;
+  }finally{
+    $("analyzeBtn").disabled=false;
+  }
+};
+
+$("startWithResumeBtn").onclick=()=>{
+  if(!activeResumeProfile){
+    return alert("Please upload and analyze a resume first.");
+  }
+  // Scroll to interviewer pane and start interview
+  $("start").click();
+};
+
 initMonaco();
 initPoseDetection();
 </script></body></html>
